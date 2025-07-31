@@ -1,6 +1,6 @@
-from fastapi import FastAPI
 import random
 from datetime import datetime
+from fastapi import FastAPI, Request
 
 app = FastAPI()
 
@@ -19,11 +19,13 @@ def endpoint():
     output = f'''{time}_{rand}'''
     return {"status": "OK", "output": output}
 
+
 @app.post("/test")
-def test(data):
-    # max = 1000
-    # min = 1
-    # rand = random.randint(min, max)
-    # time = str(datetime.now())
-    # output = f'''{time}_{rand}'''
+async def test(request: Request):
+    data = await request.json()
+    # # max = 1000
+    # # min = 1
+    # # rand = random.randint(min, max)
+    # # time = str(datetime.now())
+    # # output = f'''{time}_{rand}'''
     return {"status": "OK", "output": data}
