@@ -1,0 +1,23 @@
+@startuml RMS_UseCase
+left to right direction
+
+actor "Jira Automation" as Ops
+
+rectangle "RMS Workflow Assist" {
+    usecase "檢查專案報告\n/check_rms_report" as UC1
+    usecase "檢查分支設定" as UC2
+    usecase "檢查 Pipeline 狀態" as UC3
+    usecase "檢查 CI 設定" as UC4
+    usecase "輸出檢查報告" as UC5
+}
+
+Ops --> UC1
+
+UC1 --> UC2
+UC1 --> UC3
+UC1 --> UC4
+
+UC2 --> UC5
+UC3 --> UC5
+UC4 --> UC5
+@enduml

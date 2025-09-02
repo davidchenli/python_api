@@ -1,0 +1,32 @@
+@startuml RMS_Sequence
+actor "Jira Automation" AS Jira
+participant "API\n(FastAPI)" as API
+participant "Destruct\n(輸入解析)" as Destruct
+participant "Verify\n(檢查邏輯)" as Verify
+participant "GitLab API" as GitLab
+participant "ReportFormat\n(報表產生器)" as Report
+
+Jira -> API : 呼叫 /check_rms_report
+
+API -> Destruct : get_project_list(data)\n解析輸入
+Destruct --> API : issue_id, issue_key, project_list
+
+loop 每個專案
+    API -> Verify : execute(project)\n開始檢查
+
+    Verify -> GitLab : 取得專案資訊
+    GitLab --> Verify : 專案資料
+
+    group 檢查流程
+        Verify -> Verify : 分支檢查
+        Verify -> Verify : Pipeline 檢查
+        Verify -> Verify : CI 設定檢查
+    end
+    Verify --> API : ProjectReport
+end
+
+API -> Report : generate_report(project_output_list)
+Report --> API : 檢查報告 (Text)
+
+API --> Jira : PlainTextResponse
+@enduml

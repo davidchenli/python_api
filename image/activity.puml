@@ -1,0 +1,84 @@
+@startuml
+|Project Report|
+
+start
+
+:取得 project_id 與 project_name;
+if (成功解析專案?) then (No)
+    :返回 "錯誤: 專案不存在或解析失敗";
+    stop
+else (Yes)
+    :專案解析完成;
+endif
+
+|Branch|
+
+:分支檢查;
+if (分支存在?) then (No)
+    :紀錄 "異常: 缺少分支";
+else (Yes)
+    :分支存在;
+endif
+:分支存在檢查完成;
+
+if (分支權限充足?) then (No)
+    :紀錄 "異常: 權限不足";
+else (Yes)
+    :分支權限正常;
+endif
+:分支權限檢查完成;
+
+|Pipeline|
+
+:Pipeline 檢查;
+:獲取 Pipeline;
+if (取得最新 pipeline 成功?) then (No)
+    :紀錄 "錯誤: 無法取得最新 pipeline";
+    :Pipeline 檢查失敗;
+else (Yes)
+
+    if (狀態為 manual 或 success?) then (No)
+        :紀錄 "異常: pipeline 狀態異常";
+    else (Yes)
+        :Pipeline 狀態正常;
+    endif
+
+    if (Job 狀態正常?) then (No)
+        :紀錄 "異常: job 狀態異常";
+    else (Yes)
+        :Job 狀態正常;
+    endif
+endif
+:Pipeline 檢查完成;
+
+|CI|
+
+:CI 檢查;
+if (.gitlab-ci.yml 存在?) then (No)
+    :紀錄 "錯誤: 無法取得 .gitlab-ci.yml";
+    :CI 檢查失敗;
+else (Yes)
+
+    if (Stage 順序正確?) then (No)
+        :紀錄 "異常: Stage 順序異常";
+    else (Yes)
+    endif
+    :Stage 順序檢查完成;
+
+    if (各 Stage 檢查正常?) then (No)
+        :紀錄 "異常: Stage內 job 異常";
+    else (Yes)
+    endif
+endif
+:CI 檢查完成;
+
+|Report|
+
+:組合 最終報告;
+if (全部檢查正常?) then (No)
+    :返回 "異常";
+else (Yes)
+    :返回 "正常";
+endif
+stop
+@enduml

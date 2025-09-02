@@ -1,0 +1,31 @@
+@startuml RMS_Deployment
+skinparam componentStyle rectangle
+skinparam nodeStyle rectangle
+
+actor "Jira" as jiraClient
+
+node "Client Side" {
+    artifact "HTTP Request\n(/check_rms_report)" as request
+}
+
+node "Server (Docker Host)" {
+    node "Docker Container" {
+        component "FastAPI App\n(app/main.py)" as app
+        component "Destruct\nInput Parser" as destruct
+        component "Verify\n檢查邏輯" as verify
+        component "ReportFormat\n報告輸出" as report
+    }
+}
+
+node "External Services" {
+    node "GitLab Service" as gitlab
+}
+
+jiraClient --> request: Automation
+
+request --> app
+app --> destruct
+destruct --> verify
+verify --> report
+verify --> gitlab : REST API
+@enduml

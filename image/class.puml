@@ -1,0 +1,234 @@
+@startuml rms_service_final
+!pragma useIntermediatePackages false
+skinparam classAttributeIconSize 0
+skinparam backgroundColor #FAFAFA
+
+' ==============================
+' Repository GitLab
+' ==============================
+class rms.repository.gitlab.api.API {
+  + get_project_id(project_name: str) : Tuple[str,int,str]
+  + get_protected_branches(project_id: int) : Dict
+  + get_branch(project_id: int, branch: str) : Dict
+  + get_latest_pipeline(project_id: int, branch: str) : Dict
+  + get_pipeline_jobs(project_id: int, pipeline_id: int) : pd.DataFrame
+  + get_ci_file(project_id: int, file_path: str, branch: str) : Dict
+}
+class rms.repository.gitlab.client.Client {
+  - _url: str
+  - _token: str
+  - _session: Any
+  + get(url: str) : dict
+}
+class rms.repository.gitlab.api.GitLabCILoader{
+  <<yaml.SafeLoader>>
+}
+
+' ==============================
+' Repository Text
+' ==============================
+class rms.repository.text.yaml_clean.BranchConditionParser {
+  + parse(expr: str, stage: str) : dict
+  - _parse(expr: str) : dict
+  - _combine_parts(operator: str, parts: List[str]) : dict
+  - _split_by_operator(expr: str) : Tuple[str, List[str]]
+  - _parse_single_condition(cond: str) : dict
+  - _normalize_value(raw_value: str) : str
+  - _parse_special_var(var_name: str, value: str, operator_type: bool) : dict
+}
+
+class rms.repository.text.yaml_clean.BranchConditionEvaluator {
+  + evaluate(logic: dict, branch: str) : bool
+}
+
+
+enum rms.repository.text.yaml_clean.RuleType {
+  ALL: {'match': {'CI_COMMIT_BRANCH': '.*'}} {static}
+  NO: {'eq': {'CI_COMMIT_BRANCH': ''}} {static}
+  SKIP: {} {static}
+}
+
+' ==============================
+' Service Base Models
+' ==============================
+class rms.service.base.ApiInput {
+  issueId: int {static}
+  issueKey: str {static}
+  description: Optional[dict] {static}
+}
+
+class rms.service.base.BranchCheck {
+  status: rms.service.base.Result {static}
+  issues: List[str] {static}
+}
+enum rms.service.base.BranchIssue {
+  NotExist: 缺少 {branches} {static}
+  PermissionIssue: {branches} 權限不足 {static}
+}
+
+class rms.service.base.CICheck {
+  status: rms.service.base.Result {static}
+  issues: List[Union[rms.service.base.StageIssue, str]] {static}
+}
+enum rms.service.base.CiIssue {
+  StageError: Stage 執行順序異常 {static}
+  StageMissing: 無法取得 Stage 執行順序 {static}
+  JobNameError: job 名稱或數量錯誤錯誤 {static}
+  YamlNotFoundError: 無法取得 .gitlab-ci.yml {static}
+  StageNotFoundError: 無法取得 對應job {static}
+  MissingBranchError: {branch_name} 未設定 {static}
+  ExtraBranchError: {job_name} {branch_name}，目前為 {setting} ，預期為 never {static}
+  JobError: {job_name} {branch_name} 設定錯誤，目前為 {setting} ，預期為 {expect_setting} {static}
+  IgnoreNotSetError: 未判斷 $IGNORE_TEST 參數 {static}
+}
+
+class rms.service.base.PipelineCheck {
+  status: rms.service.base.Result {static}
+  pipeline_id: Optional[int] {static}
+  issues: List[str] {static}
+}
+enum rms.service.base.PipelineIssue {
+  NotFoundError: 無法取得最新 pipeline {static}
+  PipelineError: pipeline 狀態異常，目前為：{pipeline_status} {static}
+  JobError: job {job_name} 狀態異常，目前為：{job_status} {static}
+}
+
+class rms.service.base.ProjectDetail {
+  branch_check: rms.service.base.BranchCheck {static}
+  pipeline_check: rms.service.base.PipelineCheck {static}
+  ci_check: rms.service.base.CICheck {static}
+}
+
+class rms.service.base.ProjectReport {
+  url: str {static}
+  name: Optional[str] {static}
+  summary: rms.service.base.Result {static}
+  detail: Union[rms.service.base.ProjectDetail, str, None] {static}
+}
+
+enum rms.service.base.Result {
+  SUCCESS: 正常 ✅ {static}
+  WARNING: 異常 ⚠️ {static}
+  ERROR: 錯誤 ❌ {static}
+}
+
+class rms.service.base.StageIssue {
+  name: str {static}
+  issues: List[str] {static}
+}
+
+' ==============================
+' Service Classes with Methods
+' ==============================
+class rms.service.destruct.Destruct {
+  + get_project_list(data: ApiInput) : Tuple[int,str,List[str]]
+  - _get_from_text(description: dict) : List[str]
+  - is_valid_url(text: str) : bool
+}
+
+class rms.service.report_format.ReportFormat {
+  + generate_report(project_results: List[ProjectReport]) : str
+  + generate_overall_result(projects: List[ProjectReport]) : Tuple[Result, Union[Dict[Result,int],str], List[ProjectReport]]
+  + get_title(summary: Result, detail: dict | str) : str
+  + get_content(report_data: ProjectReport) : str
+  + _get_content_by_project(project: ProjectDetail) : str
+  - __format_stage_issues(stage_name, issues) : str
+}
+
+class rms.service.verify.Verify {
+  - gitlab_api: API
+  - evaluator: BranchConditionEvaluator
+  + execute(project_url: str) : ProjectReport
+  + get_project_id(project_url: str) : Tuple[str,int,str]
+  + check_branch(project_id: int) : Tuple[bool, BranchCheck]
+  + check_pipeline(project_id: int) : Tuple[bool, PipelineCheck]
+  + check_yaml(project_id: int, project_name: str) : Tuple[bool, CICheck]
+  - _get_ci_yaml(project_id: int, project_name: str, branch: str, yaml_file: str) : dict
+  - _check_stages_order(main_yaml: dict) : Tuple[bool,str]
+  - _get_jobs_from_stage(merged_yaml: dict) : Tuple[List,List,List,List]
+  - _check_test(test: list, merged_yaml: dict) : Tuple[bool, StageIssue]
+  - _check_coverage(coverage: list, merged_yaml: dict) : Tuple[bool, StageIssue]
+  - _check_build(build: list, merged_yaml: dict) : Tuple[bool, StageIssue]
+  - _check_deploy(deploy: list, merged_yaml: dict) : Tuple[bool, StageIssue]
+  - __get_all_yaml_recursive(tasks: list[tuple[int,str,str,str]]) : List
+  - __get_file_from_include(project_id: int, project_name: str, ref: str, include_item: dict|str) : Dict
+  - __check_rules(job_name: str, rules: list, default_setting: dict, exclude_branches: set) : Tuple[List,List,List]
+  - __format_report(detail_list: list, missing_branches: set, invalid_job_settings: list, unexpected_branch_jobs: list) : Tuple[bool,List[str]]
+}
+
+' ==============================
+' API
+' ==============================
+class rms.app.main {
+  + check_rms_report(rms.service.base.ApiInput)
+}
+
+' ==============================
+' API relation
+' ==============================
+rms.app.main ..>rms.service.destruct.Destruct
+rms.app.main ..> rms.service.verify.Verify
+rms.app.main ..> rms.service.report_format.ReportFormat
+
+' ==============================
+' Service Internal Composition
+' ==============================
+rms.service.base.BranchCheck o-- rms.service.base.Result
+rms.service.base.PipelineCheck o-- rms.service.base.Result
+rms.service.base.CICheck o-- rms.service.base.Result
+rms.service.base.ProjectReport o-- rms.service.base.Result
+rms.service.base.CICheck *-- rms.service.base.StageIssue
+rms.service.base.ProjectDetail *-- rms.service.base.BranchCheck
+rms.service.base.ProjectDetail *-- rms.service.base.PipelineCheck
+rms.service.base.ProjectDetail *-- rms.service.base.CICheck
+rms.service.base.ProjectReport *-- rms.service.base.ProjectDetail
+
+' ==============================
+' Service Internal Dependencies
+' ==============================
+rms.service.base.BranchCheck ..> rms.service.base.BranchIssue
+rms.service.base.CICheck ..> rms.service.base.CiIssue
+rms.service.base.PipelineCheck ..> rms.service.base.PipelineIssue
+
+' ==============================
+' Repository Internal Inherent
+' ==============================
+rms.repository.gitlab.client.Client <|-- rms.repository.gitlab.api.API
+
+' ==============================
+' Repository → Service Composition
+' ==============================
+rms.service.verify.Verify *-- rms.repository.gitlab.api.API
+rms.service.verify.Verify o--  rms.service.base.Result
+
+' ==============================
+' Repository → Service Dependencies
+' ==============================
+rms.service.verify.Verify ..> rms.repository.text.yaml_clean.BranchConditionEvaluator
+rms.service.verify.Verify ..> rms.service.base.ProjectReport
+rms.service.report_format.ReportFormat ..> rms.service.base.ProjectReport
+rms.service.destruct.Destruct ..> rms.service.base.ApiInput
+
+' ==============================
+' Repository Dependencies
+' ==============================
+
+rms.repository.text.yaml_clean.BranchConditionParser ..> rms.repository.text.yaml_clean.RuleType
+rms.repository.text.yaml_clean.BranchConditionEvaluator --> rms.repository.text.yaml_clean.BranchConditionParser
+rms.repository.gitlab.api.API --> rms.repository.gitlab.api.GitLabCILoader
+
+
+' ==============================
+' Method Dependencies
+' ==============================
+rms.service.report_format.ReportFormat : generate_report -> generate_overall_result -> get_title -> get_content
+rms.service.report_format.ReportFormat : get_content -> _get_content_by_project -> __format_stage_issues
+
+rms.service.verify.Verify : execute -> get_project_id -> check_branch -> check_pipeline -> check_yaml
+rms.service.verify.Verify : check_yaml -> _get_ci_yaml -> _check_stages_order -> _get_jobs_from_stage
+rms.service.verify.Verify : check_yaml -> _check_test -> _check_coverage -> _check_build -> _check_deploy
+
+rms.service.destruct.Destruct : get_project_list -> _get_from_text -> is_valid_url
+
+footer Generated by //py2puml//
+@enduml
