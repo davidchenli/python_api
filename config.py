@@ -41,8 +41,8 @@ yaml_config = {
 class Config(BaseSettings):
     model_config = SettingsConfigDict(env_file='.env', env_file_encoding='utf-8', extra='ignore')
 
-    gitlab_token: str = Field(min_length=1)
-    jira_token: str = Field(min_length=1)
+    gitlab_token: str = ""
+    jira_token: str = ""
     gitlab_uri: str = "https://swissknife.vip"
     default_branch: str = "originmain"
     level_setting: dict = {"prod-*": 30, "originmain": 30, "staging-*": 30}
